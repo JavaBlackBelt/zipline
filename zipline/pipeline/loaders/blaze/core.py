@@ -552,7 +552,6 @@ def _ensure_timestamp_field(dataset_expr, deltas, checkpoints):
     no_checkpoints_rule=no_metadata_rules,
 )
 def from_blaze(expr,
-               apply_deltas_adjustments,
                deltas='auto',
                checkpoints='auto',
                loader=None,
@@ -560,15 +559,18 @@ def from_blaze(expr,
                odo_kwargs=None,
                missing_values=None,
                no_deltas_rule='warn',
-               no_checkpoints_rule='warn'):
+               no_checkpoints_rule='warn',
+               apply_deltas_adjustments=True,):
     """Create a Pipeline API object from a blaze expression.
 
     Parameters
     ----------
     expr : Expr
         The blaze expression to use.
-    apply_deltas_adjustments : bool
+    apply_deltas_adjustments : bool, optional
         Whether or not deltas adjustments should be applied for this dataset.
+        True by default because not applying deltas adjustments is an exception
+        rather than the rule.
     deltas : Expr, 'auto' or None, optional
         The expression to use for the point in time adjustments.
         If the string 'auto' is passed, a deltas expr will be looked up
