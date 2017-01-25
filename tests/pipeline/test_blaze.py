@@ -1240,6 +1240,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                       expr,
                       deltas,
                       checkpoints,
+                      apply_deltas_adjustments,
                       expected_views,
                       expected_output,
                       finder,
@@ -1253,6 +1254,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             expr,
             deltas,
             checkpoints,
+            apply_deltas_adjustments=apply_deltas_adjustments,
             loader=loader,
             no_deltas_rule='raise',
             no_checkpoints_rule='ignore',
@@ -1480,7 +1482,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             name='delta',
             dshape=self.dshape,
         )
-        expected_views = keymap(pd.Timestamp, {
+        expected_views_with_deltas_adjustments = keymap(pd.Timestamp, {
             '2014-01-03': np.array([[10.0, 11.0, 12.0],
                                     [10.0, 11.0, 12.0],
                                     [10.0, 11.0, 12.0]]),
@@ -1488,14 +1490,36 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                                     [10.0, 11.0, 12.0],
                                     [11.0, 12.0, 13.0]]),
         })
+        expected_views_no_deltas_adjustments = keymap(pd.Timestamp, {
+            '2014-01-03': np.array([[0.0, 1.0, 2.0],
+                                    [0.0, 1.0, 2.0],
+                                    [0.0, 1.0, 2.0]]),
+            '2014-01-06': np.array([[0.0, 1.0, 2.0],
+                                    [0.0, 1.0, 2.0],
+                                    [11.0, 12.0, 13.0]]),
+        })
         if len(asset_info) == 4:
-            expected_views = valmap(
+            expected_views_with_deltas_adjustments = valmap(
                 lambda view: np.c_[view, [np.nan, np.nan, np.nan]],
-                expected_views,
+                expected_views_with_deltas_adjustments,
             )
-            expected_output_buffer = [10, 11, 12, np.nan, 11, 12, 13, np.nan]
+            expected_views_no_deltas_adjustments = valmap(
+                lambda view: np.c_[view, [np.nan, np.nan, np.nan]],
+                expected_views_no_deltas_adjustments,
+            )
+            expected_output_buffer_with_deltas_adjustments = [
+                10, 11, 12, np.nan, 11, 12, 13, np.nan
+            ]
+            expected_output_buffer_no_deltas_adjustments = [
+                0, 1, 2, np.nan, 11, 12, 13, np.nan
+            ]
         else:
-            expected_output_buffer = [10, 11, 12, 11, 12, 13]
+            expected_output_buffer_with_deltas_adjustments = [
+                10, 11, 12, 11, 12, 13
+            ]
+            expected_output_buffer_no_deltas_adjustments = [
+                0, 1, 2, 11, 12, 13
+            ]
 
         cal = pd.DatetimeIndex([
             pd.Timestamp('2014-01-01'),
@@ -1506,27 +1530,44 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
         ])
 
         with tmp_asset_finder(equities=asset_info) as finder:
-            expected_output = pd.DataFrame(
-                expected_output_buffer,
+            expected_output_with_deltas_adjustments = pd.DataFrame(
+                expected_output_buffer_with_deltas_adjustments,
                 index=pd.MultiIndex.from_product((
-                    sorted(expected_views.keys()),
+                    sorted(expected_views_with_deltas_adjustments.keys()),
                     finder.retrieve_all(asset_info.index),
                 )),
                 columns=('value',),
             )
-            self._run_pipeline(
-                expr,
-                deltas,
-                None,
-                expected_views,
-                expected_output,
-                finder,
-                calendar=cal,
-                start=cal[2],
-                end=cal[-1],
-                window_length=3,
-                compute_fn=op.itemgetter(-1),
+            expected_output_no_deltas_adjustments = pd.DataFrame(
+                expected_output_buffer_no_deltas_adjustments,
+                index=pd.MultiIndex.from_product((
+                    sorted(expected_views_with_deltas_adjustments.keys()),
+                    finder.retrieve_all(asset_info.index),
+                )),
+                columns=('value',),
             )
+            for apply_deltas_adjustments, expected_views, expected_output in (
+                    (True,
+                     expected_views_with_deltas_adjustments,
+                     expected_output_with_deltas_adjustments),
+                    (False,
+                     expected_views_no_deltas_adjustments,
+                     expected_output_no_deltas_adjustments)
+            ):
+                self._run_pipeline(
+                    expr,
+                    deltas,
+                    None,
+                    apply_deltas_adjustments,
+                    expected_views,
+                    expected_output,
+                    finder,
+                    calendar=cal,
+                    start=cal[2],
+                    end=cal[-1],
+                    window_length=3,
+                    compute_fn=op.itemgetter(-1),
+                )
 
     def test_novel_deltas_macro(self):
         base_dates = pd.DatetimeIndex([
@@ -1572,19 +1613,21 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                 )),
                 columns=('value',),
             )
-            self._run_pipeline(
-                expr,
-                deltas,
-                None,
-                expected_views,
-                expected_output,
-                finder,
-                calendar=cal,
-                start=cal[2],
-                end=cal[-1],
-                window_length=3,
-                compute_fn=op.itemgetter(-1),
-            )
+            for apply_deltas_adjustments in (True, False):
+                self._run_pipeline(
+                    expr,
+                    deltas,
+                    None,
+                    apply_deltas_adjustments,
+                    expected_views,
+                    expected_output,
+                    finder,
+                    calendar=cal,
+                    start=cal[2],
+                    end=cal[-1],
+                    window_length=3,
+                    compute_fn=op.itemgetter(-1),
+                )
 
     def _test_checkpoints_macro(self, checkpoints, ffilled_value=-1.0):
         """Simple checkpoints test that accepts a checkpoints dataframe and
