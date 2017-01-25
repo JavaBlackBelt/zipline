@@ -1805,7 +1805,8 @@ class MiscTestCase(ZiplineTestCase):
                 odo_kwargs={'a': 'b'},
             )),
             "ExprData(expr='expr', deltas='deltas',"
-            " checkpoints='checkpoints', odo_kwargs={'a': 'b'})",
+            " checkpoints='checkpoints', odo_kwargs={'a': 'b'}, "
+            "apply_deltas_adjustments=True)",
         )
 
     def test_blaze_loader_repr(self):
