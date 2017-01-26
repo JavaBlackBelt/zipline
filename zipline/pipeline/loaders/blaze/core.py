@@ -225,6 +225,9 @@ class ExprData(
         The forward fill checkpoints for the data.
     odo_kwargs : dict, optional
         The keyword arguments to forward to the odo calls internally.
+    apply_deltas_adjustments : bool, optional
+        Whether or not deltas adjustments should be applied to the baseline
+        values. If False, only novel deltas will be applied.
     """
     def __new__(cls,
                 expr,
