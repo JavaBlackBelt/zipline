@@ -66,8 +66,7 @@ class AdjustmentTestCase(TestCase):
         )
         self.assertEqual(result, expected)
 
-
-    @parameterized.expand([("some text",),("some text".encode(),),(None,)])
+    @parameterized.expand([("some text",), ("some text".encode(),), (None,)])
     def test_make_object_adjustment(self, value):
         result = adj.make_adjustment_from_indices(
             1, 2, 3, 4,
