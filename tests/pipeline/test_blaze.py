@@ -1291,26 +1291,6 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             check_dtype=False,
         )
 
-    def _get_fourth_asset_view(self, expected_views, window_length):
-        return valmap(
-            lambda view: np.c_[view, [np.nan] * window_length],
-            expected_views,
-        )
-
-    def _get_expected_output(self,
-                             expected_views,
-                             values,
-                             finder,
-                             asset_info,
-                             nassets):
-        return pd.DataFrame(
-            list(concatv(*[[value] * nassets for value in values])),
-            index=pd.MultiIndex.from_product(
-                (sorted(expected_views.keys()),
-                 finder.retrieve_all(asset_info.index),)
-            ), columns=('value',),
-        )
-
     @with_ignore_sid
     def test_deltas(self, asset_info, add_extra_sid):
         df = self.df.copy()
@@ -1337,7 +1317,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             name='delta',
             dshape=self.dshape,
         )
-        expected_views_all_deltas = keymap(pd.Timestamp, {
+        expected_views = keymap(pd.Timestamp, {
             '2014-01-02': np.array([[10.0, 11.0, 12.0],
                                     [1.0, 2.0, 3.0]]),
             '2014-01-03': np.array([[11.0, 12.0, 13.0],
@@ -1345,64 +1325,37 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             '2014-01-04': np.array([[12.0, 13.0, 14.0],
                                     [12.0, 13.0, 14.0]]),
         })
-        expected_views_novel_deltas = keymap(pd.Timestamp, {
-            '2014-01-02': np.array([[0.0, 1.0, 2.0],
-                                    [1.0, 2.0, 3.0]]),
-            '2014-01-03': np.array([[1.0, 2.0, 3.0],
-                                    [2.0, 3.0, 4.0]]),
-            '2014-01-04': np.array([[2.0, 3.0, 4.0],
-                                    [2.0, 3.0, 4.0]]),
-        })
 
         nassets = len(asset_info)
-
         if nassets == 4:
-            expected_views_all_deltas = self._get_fourth_asset_view(
-                expected_views_all_deltas, window_length=2
-            )
-            expected_views_novel_deltas = self._get_fourth_asset_view(
-                expected_views_novel_deltas, window_length=2
+            expected_views = valmap(
+                lambda view: np.c_[view, [np.nan, np.nan]],
+                expected_views,
             )
         with tmp_asset_finder(equities=asset_info) as finder:
-            expected_output_all_deltas = self._get_expected_output(
-                expected_views_all_deltas,
-                [12, 13, 14],
-                finder,
-                asset_info,
-                nassets
+            expected_output = pd.DataFrame(
+                list(concatv([12] * nassets, [13] * nassets, [14] * nassets)),
+                index=pd.MultiIndex.from_product((
+                    sorted(expected_views.keys()),
+                    finder.retrieve_all(asset_info.index),
+                )),
+                columns=('value',),
             )
-            expected_output_novel_deltas = self._get_expected_output(
-                expected_views_novel_deltas,
-                [3, 4, 4],
-                finder,
-                asset_info,
-                nassets
-            )
-
             dates = self.dates
             dates = dates.insert(len(dates), dates[-1] + timedelta(days=1))
-            for apply_deltas_adjustments, expected_views, expected_output in (
-                (True,
-                 expected_views_all_deltas,
-                 expected_output_all_deltas),
-                (False,
-                 expected_views_novel_deltas,
-                 expected_output_novel_deltas)
-            ):
-                self._run_pipeline(
-                    expr,
-                    deltas,
-                    None,
-                    expected_views,
-                    expected_output,
-                    finder,
-                    calendar=dates,
-                    start=dates[1],
-                    end=dates[-1],
-                    window_length=2,
-                    compute_fn=np.nanmax,
-                    apply_deltas_adjustments=apply_deltas_adjustments,
-                )
+            self._run_pipeline(
+                expr,
+                deltas,
+                None,
+                expected_views,
+                expected_output,
+                finder,
+                calendar=dates,
+                start=dates[1],
+                end=dates[-1],
+                window_length=2,
+                compute_fn=np.nanmax,
+            )
 
     @with_extra_sid
     def test_deltas_only_one_delta_in_universe(self, asset_info):
@@ -1414,7 +1367,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             'value': [10, 11],
         })
         deltas = bz.data(deltas, name='deltas', dshape=self.dshape)
-        expected_views_all_deltas = keymap(pd.Timestamp, {
+        expected_views = keymap(pd.Timestamp, {
             '2014-01-02': np.array([[0.0, 11.0, 2.0],
                                     [1.0, 2.0, 3.0]]),
             '2014-01-03': np.array([[10.0, 2.0, 3.0],
@@ -1422,64 +1375,40 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             '2014-01-04': np.array([[2.0, 3.0, 4.0],
                                     [2.0, 3.0, 4.0]]),
         })
-        expected_views_novel_deltas = keymap(pd.Timestamp, {
-            '2014-01-02': np.array([[0.0, 1.0, 2.0],
-                                    [1.0, 2.0, 3.0]]),
-            '2014-01-03': np.array([[1.0, 2.0, 3.0],
-                                    [2.0, 3.0, 4.0]]),
-            '2014-01-04': np.array([[2.0, 3.0, 4.0],
-                                    [2.0, 3.0, 4.0]]),
-        })
 
         nassets = len(asset_info)
         if nassets == 4:
-            expected_views_all_deltas = self._get_fourth_asset_view(
-                expected_views_all_deltas, window_length=2
-            )
-            expected_views_novel_deltas = self._get_fourth_asset_view(
-                expected_views_novel_deltas, window_length=2
+            expected_views = valmap(
+                lambda view: np.c_[view, [np.nan, np.nan]],
+                expected_views,
             )
 
         with tmp_asset_finder(equities=asset_info) as finder:
-            expected_output_all_deltas = self._get_expected_output(
-                expected_views_all_deltas,
-                [11, 10, 4],
-                finder,
-                asset_info,
-                nassets
+            expected_output = pd.DataFrame(
+                columns=[
+                    'value',
+                ],
+                data=np.array([11, 10, 4]).repeat(len(asset_info.index)),
+                index=pd.MultiIndex.from_product((
+                    sorted(expected_views.keys()),
+                    finder.retrieve_all(asset_info.index),
+                )),
             )
-            expected_output_novel_deltas = self._get_expected_output(
-                expected_views_novel_deltas,
-                [3, 4, 4],
-                finder,
-                asset_info,
-                nassets
-            )
-
             dates = self.dates
             dates = dates.insert(len(dates), dates[-1] + timedelta(days=1))
-            for apply_deltas_adjustments, expected_views, expected_output in (
-                (True,
-                 expected_views_all_deltas,
-                 expected_output_all_deltas),
-                (False,
-                 expected_views_novel_deltas,
-                 expected_output_novel_deltas)
-            ):
-                self._run_pipeline(
-                    expr,
-                    deltas,
-                    None,
-                    expected_views,
-                    expected_output,
-                    finder,
-                    calendar=dates,
-                    start=dates[1],
-                    end=dates[-1],
-                    window_length=2,
-                    compute_fn=np.nanmax,
-                    apply_deltas_adjustments=apply_deltas_adjustments,
-                )
+            self._run_pipeline(
+                expr,
+                deltas,
+                None,
+                expected_views,
+                expected_output,
+                finder,
+                calendar=dates,
+                start=dates[1],
+                end=dates[-1],
+                window_length=2,
+                compute_fn=np.nanmax,
+            )
 
     def test_deltas_macro(self):
         expr = bz.data(self.macro_df, name='expr', dshape=self.macro_dshape)
@@ -1495,58 +1424,36 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
         )
 
         nassets = len(simple_asset_info)
-        expected_views_all_deltas = keymap(pd.Timestamp, {
+        expected_views = keymap(pd.Timestamp, {
             '2014-01-02': np.array([[10.0],
                                     [1.0]]),
             '2014-01-03': np.array([[11.0],
                                     [2.0]]),
         })
-        expected_views_novel_deltas = keymap(pd.Timestamp, {
-            '2014-01-02': np.array([[0.0],
-                                    [1.0]]),
-            '2014-01-03': np.array([[1.0],
-                                    [2.0]]),
-        })
 
         with tmp_asset_finder(equities=simple_asset_info) as finder:
-            expected_output_all_deltas = self._get_expected_output(
-                expected_views_all_deltas,
-                [10, 11],
-                finder,
-                simple_asset_info,
-                nassets
+            expected_output = pd.DataFrame(
+                list(concatv([10] * nassets, [11] * nassets)),
+                index=pd.MultiIndex.from_product((
+                    sorted(expected_views.keys()),
+                    finder.retrieve_all(simple_asset_info.index),
+                )),
+                columns=('value',),
             )
-            expected_output_novel_deltas = self._get_expected_output(
-                expected_views_novel_deltas,
-                [1, 2],
-                finder,
-                simple_asset_info,
-                nassets
-            )
-
             dates = self.dates
-            for apply_deltas_adjustments, expected_views, expected_output in (
-                (True,
-                 expected_views_all_deltas,
-                 expected_output_all_deltas),
-                (False,
-                 expected_views_novel_deltas,
-                 expected_output_novel_deltas)
-            ):
-                self._run_pipeline(
-                    expr,
-                    deltas,
-                    None,
-                    expected_views,
-                    expected_output,
-                    finder,
-                    calendar=dates,
-                    start=dates[1],
-                    end=dates[-1],
-                    window_length=2,
-                    compute_fn=np.nanmax,
-                    apply_deltas_adjustments=apply_deltas_adjustments,
-                )
+            self._run_pipeline(
+                expr,
+                deltas,
+                None,
+                expected_views,
+                expected_output,
+                finder,
+                calendar=dates,
+                start=dates[1],
+                end=dates[-1],
+                window_length=2,
+                compute_fn=np.nanmax,
+            )
 
     @with_extra_sid
     def test_novel_deltas(self, asset_info):
@@ -1583,6 +1490,12 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                                     [10.0, 11.0, 12.0],
                                     [11.0, 12.0, 13.0]]),
         })
+        # The only novel delta is on 2014-01-05, because it modifies a
+        # baseline data point that occurred on 2014-01-04, which is on a
+        # Saturday. The other delta, occurring on 2014-01-02, is seen after
+        # we already see the baseline data it modifies, and so it is a
+        # non-novel delta. Thus, the only delta seen in the expected view for
+        # novel deltas is on 2014-01-06 at (2, 0), (2, 1), and (2, 2).
         expected_views_novel_deltas = keymap(pd.Timestamp, {
             '2014-01-03': np.array([[0.0, 1.0, 2.0],
                                     [0.0, 1.0, 2.0],
@@ -1591,11 +1504,18 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                                     [0.0, 1.0, 2.0],
                                     [11.0, 12.0, 13.0]]),
         })
+
+        def get_fourth_asset_view(expected_views, window_length):
+            return valmap(
+                lambda view: np.c_[view, [np.nan] * window_length],
+                expected_views,
+            )
+
         if len(asset_info) == 4:
-            expected_views_all_deltas = self._get_fourth_asset_view(
+            expected_views_all_deltas = get_fourth_asset_view(
                 expected_views_all_deltas, window_length=3
             )
-            expected_views_novel_deltas = self._get_fourth_asset_view(
+            expected_views_novel_deltas = get_fourth_asset_view(
                 expected_views_novel_deltas, window_length=3
             )
             expected_output_buffer_all_deltas = [
@@ -1637,14 +1557,20 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                 )),
                 columns=('value',),
             )
-            for apply_deltas_adjustments, expected_views, expected_output in (
-                    (True,
-                     expected_views_all_deltas,
-                     expected_output_all_deltas),
-                    (False,
-                     expected_views_novel_deltas,
-                     expected_output_novel_deltas)
-            ):
+
+            it = (
+                (
+                    True,
+                    expected_views_all_deltas,
+                    expected_output_all_deltas
+                ),
+                (
+                    False,
+                    expected_views_novel_deltas,
+                    expected_output_novel_deltas
+                )
+            )
+            for apply_deltas_adjs, expected_views, expected_output in it:
                 self._run_pipeline(
                     expr,
                     deltas,
@@ -1657,7 +1583,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                     end=cal[-1],
                     window_length=3,
                     compute_fn=op.itemgetter(-1),
-                    apply_deltas_adjustments=apply_deltas_adjustments,
+                    apply_deltas_adjustments=apply_deltas_adjs,
                 )
 
     def test_novel_deltas_macro(self):
@@ -1687,6 +1613,12 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                                     [10.0],
                                     [11.0]]),
         })
+        # The only novel delta is on 2014-01-05, because it modifies a
+        # baseline data point that occurred on 2014-01-04, which is on a
+        # Saturday. The other delta, occurring on 2014-01-02, is seen after
+        # we already see the baseline data it modifies, and so it is a
+        # non-novel delta. Thus, the only delta seen in the expected view for
+        # novel deltas is on 2014-01-06 at (2, 0).
         expected_views_novel_deltas = keymap(pd.Timestamp, {
             '2014-01-03': np.array([[0.0],
                                     [0.0],
@@ -1703,30 +1635,39 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
             # omitting the 4th and 5th to simulate a weekend
             pd.Timestamp('2014-01-06'),
         ])
+
+        def get_expected_output(expected_views, values, asset_info):
+            return pd.DataFrame(
+                list(concatv(*([value] * nassets for value in values))),
+                index=pd.MultiIndex.from_product(
+                    (sorted(expected_views.keys()),
+                     finder.retrieve_all(asset_info.index),)
+                ), columns=('value',),
+            )
         with tmp_asset_finder(equities=simple_asset_info) as finder:
-            expected_output_all_deltas = self._get_expected_output(
+            expected_output_all_deltas = get_expected_output(
                 expected_views_all_deltas,
                 [10, 11],
-                finder,
                 simple_asset_info,
-                nassets
             )
-            expected_output_novel_deltas = self._get_expected_output(
+            expected_output_novel_deltas = get_expected_output(
                 expected_views_novel_deltas,
                 [0, 11],
-                finder,
                 simple_asset_info,
-                nassets
             )
-
-            for apply_deltas_adjustments, expected_views, expected_output in (
-                (True,
-                 expected_views_all_deltas,
-                 expected_output_all_deltas),
-                (False,
-                 expected_views_novel_deltas,
-                 expected_output_novel_deltas)
-            ):
+            it = (
+                (
+                    True,
+                    expected_views_all_deltas,
+                    expected_output_all_deltas
+                ),
+                (
+                    False,
+                    expected_views_novel_deltas,
+                    expected_output_novel_deltas
+                )
+            )
+            for apply_deltas_adjs, expected_views, expected_output in it:
                 self._run_pipeline(
                     expr,
                     deltas,
@@ -1739,7 +1680,7 @@ class BlazeToPipelineTestCase(WithAssetFinder, ZiplineTestCase):
                     end=cal[-1],
                     window_length=3,
                     compute_fn=op.itemgetter(-1),
-                    apply_deltas_adjustments=apply_deltas_adjustments,
+                    apply_deltas_adjustments=apply_deltas_adjs,
                 )
 
     def _test_checkpoints_macro(self, checkpoints, ffilled_value=-1.0):
